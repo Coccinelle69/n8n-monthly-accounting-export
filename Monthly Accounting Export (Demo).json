@@ -1,0 +1,359 @@
+{
+  "name": "Monthly Accounting Export (Demo)",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -784,
+        48
+      ],
+      "id": "0023b775-f1fa-4d0d-9991-2b70b28451cc",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "=http://aurora-back:8080/api/export/payments?month={{ $json.month }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -336,
+        0
+      ],
+      "id": "aeee8aa2-0ff2-4ba4-bb3f-7e7f48760abe",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rEUdPACUZUuACgep",
+          "name": "Aurora Demo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json\nconst num = v => Number(v ?? 0)\nconst round2 = v => Math.round(v * 100) / 100\nconst PAYMENT_STATUSES = ['FULL','REFUNDED','PARTIAL','DEPOSIT']\n\nlet rows = []\nlet issues =[]\nlet income = 0, commissions = 0, refunds = 0\n\nfor(const p of data.payments) {\n  const date = p.createdAt.slice(0,10)\n\n  if(PAYMENT_STATUSES.includes(p.paymentStatus)) {\n    income += num(p.amountPaid)\n    commissions += num(p.commission)\n    rows.push({ Date: date, Type: 'Income', Reservation: p.reservationRef,\n                Amount: num(p.amountPaid), Method: p.paymentMethod, Note: p.paymentStatus })\n    if(num(p.commission) > 0) \n      rows.push({ Date: date, Type: 'Commission', Reservation: p.reservationRef,\n                  Amount: -num(p.commission), Method: p.paymentMethod, Note: 'Platform/Stripe fee' })\n  }\n  \n  if(p.paymentStatus== \"FAILED\" || p.paymentStatus== \"PENDING\") \n    issues.push(`${p.reservationRef}: payment ${p.paymentStatus}`)\n  if(num(p.amountPaid) > num(p.amountPaid)) \n    issues.push(`${p.reservationRef}: paid more than expected`)\n  if('stripePaymentIntentId' in p && p.paymentMethod === 'STRIPE' && num(p.amountPaid > 0) && !p.stripePaymentIntentId) \n    issues.push(`${p.reservationRef}: Stripe payment without payment intent ID`)\n}\n\nfor (const r of data.refunds) {\n  refunds += num(r.amountRefunded);\n  rows.push({ Date: r.createdAt.slice(0, 10), Type: 'Refund', Reservation: r.reservationRef,\n              Amount: -num(r.amountRefunded), Method: r.refundMethod, Note: r.reason });\n  if (r.refundMethod === 'STRIPE' && !r.stripeRefundId)\n    issues.push(`${r.reservationRef}: Stripe refund without refund ID`);\n}\n\nreturn [{\n  json: {\n    month:data.month,\n    refunds: round2(refunds),\n    commissions: round2(commissions),\n    income: round2(income),\n    net: round2(income - refunds - commissions),\n    issues,\n    rows\n  }\n}]"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        0
+      ],
+      "id": "b6fb4a79-27dd-46cf-8c5c-8eec9f7e0246",
+      "name": "Categorize"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "rows",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1.1,
+      "position": [
+        112,
+        0
+      ],
+      "id": "89888250-be92-4256-b841-5d6d9b21ab2d",
+      "name": "Split Rows"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {
+          "fileName": "=Accounting_{{ $('Categorize').first().json.month }}.xlsx",
+          "sheetName": "Transactions"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.2,
+      "position": [
+        336,
+        0
+      ],
+      "id": "cd947038-0a92-453d-b1aa-533a4667abe8",
+      "name": "Create Excel"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "8f353c91-eefd-4cbf-b852-691d61d3c58d",
+              "leftValue": "={{ $('Categorize').first().json.issues.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        560,
+        0
+      ],
+      "id": "c0d9f633-6609-4431-a291-38410860043d",
+      "name": "Has issues ?"
+    },
+    {
+      "parameters": {
+        "fromEmail": "accounting@example.com",
+        "toEmail": "bookkeeping@example.com",
+        "subject": "=⚠️ Accounting {{ $('Categorize').first().json.month }}: review needed",
+        "emailFormat": "text",
+        "text": "=Monthly accounting export for {{ $('Categorize').first().json.month }}\n\nIncome: {{ $('Categorize').first().json.income.toFixed(2) }} €\nCommissions: {{ $('Categorize').first().json.commissions.toFixed(2) }} €\nRefunds: {{ $('Categorize').first().json.refunds.toFixed(2) }} €\nNet: {{ $('Categorize').first().json.net.toFixed(2) }} €\n\nPlease review:\n{{ $('Categorize').first().json.issues.join('\\n') }}\n\nThe Excel file is attached.",
+        "options": {
+          "appendAttribution": false,
+          "fileAttachments": "data"
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        800,
+        -128
+      ],
+      "id": "988f3fe9-d2a4-43fc-a1ec-9ddcd18ba76a",
+      "name": "Review Needed",
+      "webhookId": "a08f957b-14d4-48fd-bf46-f654b0dd66f0",
+      "credentials": {
+        "smtp": {
+          "id": "jfK7OZRVhkP8mdBr",
+          "name": "Aurora Mailpit"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "bookkeeping@example.com",
+        "toEmail": "bookkeeping@example.com",
+        "subject": "=✅ Accounting {{ $('Categorize').first().json.month }}: export complete",
+        "emailFormat": "text",
+        "text": "=Monthly accounting export for {{ $('Categorize').first().json.month }}\n\nIncome: {{ $('Categorize').first().json.income.toFixed(2) }} €\nCommissions: {{ $('Categorize').first().json.commissions.toFixed(2) }} €\nRefunds: {{ $('Categorize').first().json.refunds.toFixed(2) }} €\nNet: {{ $('Categorize').first().json.net.toFixed(2) }} €\n\nThe Excel file is attached.",
+        "options": {
+          "appendAttribution": false,
+          "fileAttachments": "data"
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        800,
+        80
+      ],
+      "id": "46785b33-c25f-44dd-8d51-010f3e400005",
+      "name": "Export Complete",
+      "webhookId": "a08f957b-14d4-48fd-bf46-f654b0dd66f0",
+      "credentials": {
+        "smtp": {
+          "id": "zgpYclukk1vrGfC0",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months",
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -784,
+        -128
+      ],
+      "id": "3c45ca63-9c60-46ba-88e4-ba88b5d516f6",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0ccdce5b-1b79-41c3-8454-4e1e5a6b426d",
+              "name": "month",
+              "value": "={{ $('Schedule Trigger').isExecuted ? $now.minus({ months: 1 }).toFormat('yyyy-MM') : $now.toFormat('yyyy-MM') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -560,
+        0
+      ],
+      "id": "a97fd998-448c-44b3-9ead-d4dacfd7a7aa",
+      "name": "Set month"
+    },
+    {
+      "parameters": {
+        "formTitle": "Aurora – Monthly Accounting Export (Demo)",
+        "formDescription": "Runs the monthly accounting export on Aurora demo data and sends the result to the demo mailbox.",
+        "responseMode": "lastNode",
+        "options": {
+          "path": "accounting-demo",
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "Done! Open the demo mailbox to see the email with the Excel file: https://emails-demo.aurora-apartment-skrbin.hr"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -784,
+        240
+      ],
+      "id": "651fa0f1-befb-46dc-96ee-7eb88a0bd265",
+      "name": "Demo Form",
+      "webhookId": "88607e4a-1d26-49ff-84f2-46074259d11a"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Set month",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Categorize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Categorize": {
+      "main": [
+        [
+          {
+            "node": "Split Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Rows": {
+      "main": [
+        [
+          {
+            "node": "Create Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Excel": {
+      "main": [
+        [
+          {
+            "node": "Has issues ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has issues ?": {
+      "main": [
+        [
+          {
+            "node": "Review Needed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Export Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set month",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set month": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demo Form": {
+      "main": [
+        [
+          {
+            "node": "Set month",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "4179fcbe-914c-4212-ab35-d64b43ae0bd8",
+  "meta": {
+    "instanceId": "d93ba0733b8dc2258a6f95a36a3ead77174abd1542d92fdb4bd1db8ae4cf7468"
+  },
+  "nodeGroups": [],
+  "id": "4Y0b9A8JOyeAXNIx",
+  "tags": []
+}

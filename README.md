@@ -21,6 +21,18 @@ A public demo runs on Aurora's demo tenant:
 
 The demo only reads demo data. The n8n editor itself stays private.
 
+## Process: before and after
+
+I first mapped the manual month-end process, then designed the automated one (BPMN 2.0).
+
+**As-is: manual.** Every step is done by hand, with a loop back whenever something doesn't add up.
+
+![As-is process](process-as-is.svg)
+
+**To-be: with n8n.** Collecting, calculating and checking run automatically. People only step in to book the month, and to clarify issues when the workflow flags any.
+
+![To-be process](process-to-be.svg)
+
 ## How it works
 
 | Step | Node | Purpose |

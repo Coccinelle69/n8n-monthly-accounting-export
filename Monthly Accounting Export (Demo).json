@@ -36,7 +36,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const data = $input.first().json\nconst num = v => Number(v ?? 0)\nconst round2 = v => Math.round(v * 100) / 100\nconst PAYMENT_STATUSES = ['FULL','REFUNDED','PARTIAL','DEPOSIT']\n\nlet rows = []\nlet issues =[]\nlet income = 0, commissions = 0, refunds = 0\n\nfor(const p of data.payments) {\n  const date = p.createdAt.slice(0,10)\n\n  if(PAYMENT_STATUSES.includes(p.paymentStatus)) {\n    income += num(p.amountPaid)\n    commissions += num(p.commission)\n    rows.push({ Date: date, Type: 'Income', Reservation: p.reservationRef,\n                Amount: num(p.amountPaid), Method: p.paymentMethod, Note: p.paymentStatus })\n    if(num(p.commission) > 0) \n      rows.push({ Date: date, Type: 'Commission', Reservation: p.reservationRef,\n                  Amount: -num(p.commission), Method: p.paymentMethod, Note: 'Platform/Stripe fee' })\n  }\n  \n  if(p.paymentStatus== \"FAILED\" || p.paymentStatus== \"PENDING\") \n    issues.push(`${p.reservationRef}: payment ${p.paymentStatus}`)\n  if(num(p.amountPaid) > num(p.amountPaid)) \n    issues.push(`${p.reservationRef}: paid more than expected`)\n  if('stripePaymentIntentId' in p && p.paymentMethod === 'STRIPE' && num(p.amountPaid > 0) && !p.stripePaymentIntentId) \n    issues.push(`${p.reservationRef}: Stripe payment without payment intent ID`)\n}\n\nfor (const r of data.refunds) {\n  refunds += num(r.amountRefunded);\n  rows.push({ Date: r.createdAt.slice(0, 10), Type: 'Refund', Reservation: r.reservationRef,\n              Amount: -num(r.amountRefunded), Method: r.refundMethod, Note: r.reason });\n  if (r.refundMethod === 'STRIPE' && !r.stripeRefundId)\n    issues.push(`${r.reservationRef}: Stripe refund without refund ID`);\n}\n\nreturn [{\n  json: {\n    month:data.month,\n    refunds: round2(refunds),\n    commissions: round2(commissions),\n    income: round2(income),\n    net: round2(income - refunds - commissions),\n    issues,\n    rows\n  }\n}]"
+        "jsCode": "const data = $input.first().json\nconst num = v => Number(v ?? 0)\nconst round2 = v => Math.round(v * 100) / 100\nconst PAYMENT_STATUSES = ['FULL','REFUNDED','PARTIAL','DEPOSIT']\n\nlet rows = []\nlet issues =[]\nlet income = 0, commissions = 0, refunds = 0\n\nfor(const p of data.payments) {\n  const date = p.createdAt.slice(0,10)\n\n  if(PAYMENT_STATUSES.includes(p.paymentStatus)) {\n    income += num(p.amountPaid)\n    commissions += num(p.commission)\n    rows.push({ Date: date, Type: 'Income', Reservation: p.reservationRef,\n                Amount: num(p.amountPaid), Method: p.paymentMethod, Note: p.paymentStatus })\n    if(num(p.commission) > 0) \n      rows.push({ Date: date, Type: 'Commission', Reservation: p.reservationRef,\n                  Amount: -num(p.commission), Method: p.paymentMethod, Note: 'Platform/Stripe fee' })\n  }\n  \n  if(p.paymentStatus== \"FAILED\" || p.paymentStatus== \"PENDING\") \n    issues.push(`${p.reservationRef}: payment ${p.paymentStatus}`)\n  if(num(p.amountPaid) > num(p.amountExpected)) \n    issues.push(`${p.reservationRef}: paid more than expected`)\n  if('stripePaymentIntentId' in p && p.paymentMethod === 'STRIPE' && num(p.amountPaid) > 0 && !p.stripePaymentIntentId) \n    issues.push(`${p.reservationRef}: Stripe payment without payment intent ID`)\n}\n\nfor (const r of data.refunds) {\n  refunds += num(r.amountRefunded);\n  rows.push({ Date: r.createdAt.slice(0, 10), Type: 'Refund', Reservation: r.reservationRef,\n              Amount: -num(r.amountRefunded), Method: r.refundMethod, Note: r.reason });\n  if (r.refundMethod === 'STRIPE' && !r.stripeRefundId)\n    issues.push(`${r.reservationRef}: Stripe refund without refund ID`);\n}\n\nreturn [{\n  json: {\n    month:data.month,\n    refunds: round2(refunds),\n    commissions: round2(commissions),\n    income: round2(income),\n    net: round2(income - refunds - commissions),\n    issues,\n    rows\n  }\n}]"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -141,7 +141,7 @@
     },
     {
       "parameters": {
-        "fromEmail": "bookkeeping@example.com",
+        "fromEmail": "accounting@example.com",
         "toEmail": "bookkeeping@example.com",
         "subject": "=✅ Accounting {{ $('Categorize').first().json.month }}: export complete",
         "emailFormat": "text",
@@ -162,8 +162,8 @@
       "webhookId": "a08f957b-14d4-48fd-bf46-f654b0dd66f0",
       "credentials": {
         "smtp": {
-          "id": "zgpYclukk1vrGfC0",
-          "name": "SMTP account"
+          "id": "jfK7OZRVhkP8mdBr",
+          "name": "Aurora Mailpit"
         }
       }
     },
@@ -349,7 +349,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "4179fcbe-914c-4212-ab35-d64b43ae0bd8",
+  "versionId": "35e8e8f7-aa1e-4fc3-a9fb-76c425040d33",
   "meta": {
     "instanceId": "d93ba0733b8dc2258a6f95a36a3ead77174abd1542d92fdb4bd1db8ae4cf7468"
   },

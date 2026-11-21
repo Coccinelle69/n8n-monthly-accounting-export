@@ -21,6 +21,18 @@ Eine öffentliche Demo läuft auf dem Demo-Mandanten von Aurora:
 
 Die Demo liest nur Demo-Daten. Der n8n-Editor selbst bleibt privat.
 
+## Prozess: vorher und nachher
+
+Zuerst habe ich den manuellen Monatsabschluss als Ist-Prozess aufgenommen und danach den automatisierten Soll-Prozess entworfen (BPMN 2.0).
+
+**Ist: manuell.** Jeder Schritt ist Handarbeit, und bei Unstimmigkeiten geht es zurück in die Schleife.
+
+![Ist-Prozess](process-as-is.svg)
+
+**Soll: mit n8n.** Sammeln, Rechnen und Prüfen laufen automatisch. Menschen buchen nur noch den Monat und klären Auffälligkeiten, wenn der Workflow welche meldet.
+
+![Soll-Prozess](process-to-be.svg)
+
 ## Ablauf
 
 | Schritt | Node | Aufgabe |
